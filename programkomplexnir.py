@@ -1,3 +1,4 @@
+
 import os
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, simpledialog
@@ -12,6 +13,7 @@ from PIL import Image, ImageTk
 from matplotlib.colors import LinearSegmentedColormap
 import json
 import pickle
+import re
 
 
 class TabbedApp:
@@ -98,7 +100,19 @@ class TabbedApp:
                     'x_lim_max': 10.0,
                     'y_lim_min': 0.0,
                     'y_lim_max': 1.0,
-                    'thickness': 2.0,
+                    # Для начального состояния
+                    'thickness': {
+                        'q': 2.0,
+                        'c_f': 2.0,
+                        'c_z': 2.0,
+                        'n': 2.0,
+                        'Q_c': 2.0,
+                        'h': 2.0,
+                        'V_c': 2.0,
+                        'V_s': 2.0,
+                        'c_r': 2.0,
+                        'c_z/c_r': 2.0,
+                    },
                     'font_size': 12,
                     'title_font_size': 14,
                     'axis_font_size': 12,
@@ -129,7 +143,7 @@ class TabbedApp:
                     'axis_font_size': 12,
                     'legend_font_size': 10,
                     'x_label': "t",
-                    'y_label': "Amplitude",
+                    'y_label': "$A_m$",
                     'markers': {'Amp1': '', 'Amp2': '', 'Amp3': '', 'Amp4': '', 'Amp5': '', 'Amp6': '', 'Amp0': ''},
                     'colors': {'Amp1': 'blue', 'Amp2': 'green', 'Amp3': 'orange', 'Amp4': 'red', 'Amp5': 'purple',
                                'Amp6': 'cyan', 'Amp0': 'magenta'},
@@ -224,6 +238,11 @@ class TabbedApp:
         self.plot_params_fourier = self.create_plot_params_fourier()
         self.plot_params_radius = self.create_plot_params_radius()
 
+        # Устанавливаем значения по умолчанию для выбора функций
+        self.function_vars_initial['q'].set(True)  # Выбираем 'q' по умолчанию для начального состояния
+        self.function_vars_fourier['Amp1'].set(True)  # Выбираем 'Amp1' по умолчанию для Фурье
+        self.function_vars_radius['Все радиусы'].set(True)  # Выбираем все радиусы по умолчанию
+
     def load_presets(self):
         """Загружает пресеты из файла, если он существует"""
         if os.path.exists(self.presets_file):
@@ -289,18 +308,6 @@ class TabbedApp:
         help_text_widget.config(state=tk.DISABLED)
         help_text_widget.pack(fill=tk.BOTH, expand=True)
 
-        # Загрузка и отображение изображения
-        try:
-            img = Image.open("help_initial.png")
-            img = img.resize((900, 600), Image.Resampling.LANCZOS)
-            photo = ImageTk.PhotoImage(img)
-            img_label = tk.Label(help_window, image=photo)
-            img_label.image = photo  # Сохраняем ссылку
-            img_label.pack(pady=10)
-        except Exception as e:
-            error_label = tk.Label(help_window, text=f"Ошибка загрузки изображения: {str(e)}", fg="red")
-            error_label.pack()
-
     def show_help_fourier(self):
         help_window = tk.Toplevel(self.root)
         help_window.title("Справка: Визуализация Фурье-амплитуд")
@@ -333,17 +340,6 @@ class TabbedApp:
         help_text_widget.config(state=tk.DISABLED)
         help_text_widget.pack(fill=tk.BOTH, expand=True)
 
-        try:
-            img = Image.open("help_fourier.png")
-            img = img.resize((900, 600), Image.Resampling.LANCZOS)
-            photo = ImageTk.PhotoImage(img)
-            img_label = tk.Label(help_window, image=photo)
-            img_label.image = photo
-            img_label.pack(pady=10)
-        except Exception as e:
-            error_label = tk.Label(help_window, text=f"Ошибка загрузки изображения: {str(e)}", fg="red")
-            error_label.pack()
-
     def show_help_radius(self):
         help_window = tk.Toplevel(self.root)
         help_window.title("Справка: Распределение характеристик по радиусу")
@@ -371,17 +367,6 @@ class TabbedApp:
         help_text_widget.insert(tk.END, help_text)
         help_text_widget.config(state=tk.DISABLED)
         help_text_widget.pack(fill=tk.BOTH, expand=True)
-
-        try:
-            img = Image.open("help_radius.png")
-            img = img.resize((600, 300), Image.Resampling.LANCZOS)
-            photo = ImageTk.PhotoImage(img)
-            img_label = tk.Label(help_window, image=photo)
-            img_label.image = photo
-            img_label.pack(pady=10)
-        except Exception as e:
-            error_label = tk.Label(help_window, text=f"Ошибка загрузки изображения: {str(e)}", fg="red")
-            error_label.pack()
 
     def show_help_batch(self):
         help_window = tk.Toplevel(self.root)
@@ -415,17 +400,6 @@ class TabbedApp:
         help_text_widget.insert(tk.END, help_text)
         help_text_widget.config(state=tk.DISABLED)
         help_text_widget.pack(fill=tk.BOTH, expand=True)
-
-        try:
-            img = Image.open("help_batch.png")
-            img = img.resize((600, 300), Image.Resampling.LANCZOS)
-            photo = ImageTk.PhotoImage(img)
-            img_label = tk.Label(help_window, image=photo)
-            img_label.image = photo
-            img_label.pack(pady=10)
-        except Exception as e:
-            error_label = tk.Label(help_window, text=f"Ошибка загрузки изображения: {str(e)}", fg="red")
-            error_label.pack()
 
     def apply_preset_initial(self, event=None):
         """Применяет выбранный пресет для вкладки начального состояния"""
@@ -957,24 +931,41 @@ class TabbedApp:
         self.settings_button_radius.pack(side=tk.BOTTOM, pady=(0, 10))
 
     def extract_time_from_filename(self, filename):
-
         try:
-            # Разделяем имя файла по символу '_'
-            parts = filename.split('_')
-            if len(parts) < 3:
-                return None  # Если формат имени файла не соответствует ожидаемому
+            base = os.path.splitext(filename)[0]
 
-            # Извлекаем целую и дробную части
-            integer_part = parts[1].strip()  # Целая часть
-            fractional_part = parts[2].split('.')[0].strip()  # Дробная часть до точки
+            if base.startswith("dq"):
+                remaining = base[2:]
+            elif base.startswith("q_"):
+                remaining = base[2:]
+            else:
+                return None
 
-            # Заменяем пробелы на нули
-            integer_part = integer_part.replace(' ', '0')
-            fractional_part = fractional_part.replace(' ', '0')
+            # Разделение числовой части на компоненты
+            parts = re.split(r'[_ ]+', remaining.strip())
 
-            # Преобразуем в число
-            time_value = float(f"{integer_part}.{fractional_part}")
-            return time_value
+            if not parts:
+                return 0.0
+
+            # Извлечение целой и дробной частей
+            if len(parts) >= 2:
+                integer_str, fractional_str = parts[0], parts[1]
+            else:
+                integer_str = '0'
+                fractional_str = parts[0]
+
+            integer_str = integer_str or '0'
+            fractional_str = fractional_str or '0'
+
+            # Форматирование дробной части до трех цифр
+            fractional_padded = fractional_str.zfill(3)[:3]
+
+            integer = int(integer_str)
+            fractional = int(fractional_padded)
+
+            total = integer * 1000 + fractional
+            return total / 1000
+
         except Exception as e:
             print(f"Ошибка при извлечении времени из файла {filename}: {e}")
             return None
@@ -1133,12 +1124,24 @@ class TabbedApp:
 
     def load_data_initial(self):
         self.load_data('initial')
+        # Если ни одна функция не выбрана, выбираем первую
+        if not any(var.get() for var in self.function_vars_initial.values()):
+            self.function_vars_initial['q'].set(True)
+        self.update_graph_from_selection_initial()
 
     def load_data_fourier(self):
         self.load_data('fourier')
+        # Если ни одна функция не выбрана, выбираем первую
+        if not any(var.get() for var in self.function_vars_fourier.values()):
+            self.function_vars_fourier['Amp1'].set(True)
+        self.update_graph_from_selection_fourier()
 
     def load_data_radius(self):
         self.load_data('radius')
+        # Если ни одна функция не выбрана, выбираем все радиусы
+        if not any(var.get() for var in self.function_vars_radius.values()):
+            self.function_vars_radius['Все радиусы'].set(True)
+        self.update_graph_from_selection_radius()
 
     def load_batch_data(self):
         filename = filedialog.askopenfilename(
@@ -1284,7 +1287,9 @@ class TabbedApp:
             return
 
         self.initial_ax.clear()
-
+        if not any(var.get() for var in self.function_vars_initial.values()):
+            self.function_vars_initial['q'].set(True)  # Выбираем 'q' по умолчанию
+            messagebox.showinfo("Info", "Автоматически выбрана функция 'q' для отображения")
         thickness = self.plot_params_initial['thickness']
         title_font_size = self.plot_params_initial['title_font_size']
         axis_font_size = self.plot_params_initial['axis_font_size']
@@ -1399,7 +1404,9 @@ class TabbedApp:
             return
 
         self.fourier_ax.clear()
-
+        if not any(var.get() for var in self.function_vars_fourier.values()):
+            self.function_vars_fourier['Amp1'].set(True)  # Выбираем 'Amp1' по умолчанию
+            messagebox.showinfo("Info", "Автоматически выбрана функция 'Amp1' для отображения")
         thickness = self.plot_params_fourier['thickness']
         title_font_size = self.plot_params_fourier['title_font_size']
         axis_font_size = self.plot_params_fourier['axis_font_size']
@@ -1411,7 +1418,7 @@ class TabbedApp:
             color = self.plot_params_fourier['colors']['Amp1']
             marker = self.plot_params_fourier['markers']['Amp1']
             line_style = self.plot_params_fourier['line_styles']['Amp1']
-            self.fourier_ax.plot(self.x2, self.amp1, label='Амплитуда первой фурье-моды', color=color,
+            self.fourier_ax.plot(self.x2, self.amp1, label='$A_{m}$=1', color=color,
                                  linewidth=thickness,
                                  marker=marker, markersize=thickness * 2, linestyle=line_style)
             selected_functions.append('$A_{m1}$')
@@ -1420,7 +1427,7 @@ class TabbedApp:
             color = self.plot_params_fourier['colors']['Amp2']
             marker = self.plot_params_fourier['markers']['Amp2']
             line_style = self.plot_params_fourier['line_styles']['Amp2']
-            self.fourier_ax.plot(self.x2, self.amp2, label='Амплитуда второй фурье-моды', color=color,
+            self.fourier_ax.plot(self.x2, self.amp2, label='$A_{m}$=2', color=color,
                                  linewidth=thickness,
                                  marker=marker, markersize=thickness * 2, linestyle=line_style)
             selected_functions.append('$A_{m2}$')
@@ -1429,7 +1436,7 @@ class TabbedApp:
             color = self.plot_params_fourier['colors']['Amp3']
             marker = self.plot_params_fourier['markers']['Amp3']
             line_style = self.plot_params_fourier['line_styles']['Amp3']
-            self.fourier_ax.plot(self.x2, self.amp3, label='Амплитуда третьей фурье-моды', color=color,
+            self.fourier_ax.plot(self.x2, self.amp3, label='$A_{m}$=3', color=color,
                                  linewidth=thickness,
                                  marker=marker, markersize=thickness * 2, linestyle=line_style)
             selected_functions.append('$A_{m3}$')
@@ -1438,7 +1445,7 @@ class TabbedApp:
             color = self.plot_params_fourier['colors']['Amp4']
             marker = self.plot_params_fourier['markers']['Amp4']
             line_style = self.plot_params_fourier['line_styles']['Amp4']
-            self.fourier_ax.plot(self.x2, self.amp4, label='Амплитуда четвертой фурье-моды', color=color,
+            self.fourier_ax.plot(self.x2, self.amp4, label='$A_{m}$=4', color=color,
                                  linewidth=thickness,
                                  marker=marker, markersize=thickness * 2, linestyle=line_style)
             selected_functions.append('$A_{m4}$')
@@ -1447,7 +1454,7 @@ class TabbedApp:
             color = self.plot_params_fourier['colors']['Amp5']
             marker = self.plot_params_fourier['markers']['Amp5']
             line_style = self.plot_params_fourier['line_styles']['Amp5']
-            self.fourier_ax.plot(self.x2, self.amp5, label='Амплитуда пятой фурье-моды', color=color,
+            self.fourier_ax.plot(self.x2, self.amp5, label='$A_{m}$=5', color=color,
                                  linewidth=thickness,
                                  marker=marker, markersize=thickness * 2, linestyle=line_style)
             selected_functions.append('$A_{m5}$')
@@ -1456,7 +1463,7 @@ class TabbedApp:
             color = self.plot_params_fourier['colors']['Amp6']
             marker = self.plot_params_fourier['markers']['Amp6']
             line_style = self.plot_params_fourier['line_styles']['Amp6']
-            self.fourier_ax.plot(self.x2, self.amp6, label='Амплитуда шестой фурье-моды', color=color,
+            self.fourier_ax.plot(self.x2, self.amp6, label='$A_{m}$=6', color=color,
                                  linewidth=thickness,
                                  marker=marker, markersize=thickness * 2, linestyle=line_style)
             selected_functions.append('$A_{m6}$')
@@ -1465,7 +1472,7 @@ class TabbedApp:
             color = self.plot_params_fourier['colors']['Amp0']
             marker = self.plot_params_fourier['markers']['Amp0']
             line_style = self.plot_params_fourier['line_styles']['Amp0']
-            self.fourier_ax.plot(self.x2, self.amp0, label='Амплитуда нулевой фурье-моды', color=color,
+            self.fourier_ax.plot(self.x2, self.amp0, label='$A_{m}$=0', color=color,
                                  linewidth=thickness,
                                  marker=marker, markersize=thickness * 2, linestyle=line_style)
             selected_functions.append('$A_{m0}$')
@@ -1497,7 +1504,9 @@ class TabbedApp:
             return
 
         self.radius_ax.clear()
-
+        if not any(var.get() for var in self.function_vars_radius.values()):
+            self.function_vars_radius['Все радиусы'].set(True)  # Выбираем все радиусы по умолчанию
+            messagebox.showinfo("Info", "Автоматически выбраны все радиусы для отображения")
         thickness = self.plot_params_radius['thickness']
         title_font_size = self.plot_params_radius['title_font_size']
         axis_font_size = self.plot_params_radius['axis_font_size']
@@ -2127,143 +2136,101 @@ class TabbedApp:
             messagebox.showwarning("Warning", "Сначала выберите директорию для сохранения.")
             return
 
-        # Создаем окно выбора формата
-        format_window = tk.Toplevel(self.root)
-        format_window.title("Выбор формата изображения")
+        # Создаем окно для выбора параметров сохранения
+        save_window = tk.Toplevel(self.root)
+        save_window.title("Параметры сохранения")
 
-        ttk.Label(format_window, text="Выберите формат изображения:").pack(pady=10)
-
+        # Выбор формата изображения
+        ttk.Label(save_window, text="Формат изображения:").grid(row=0, column=0, padx=10, pady=5)
         format_var = tk.StringVar(value=self.image_format.get())
         formats = ['png', 'jpg', 'jpeg', 'tiff', 'svg', 'pdf', 'eps']
-        format_menu = ttk.Combobox(format_window, textvariable=format_var, values=formats)
-        format_menu.pack(pady=5)
+        format_menu = ttk.Combobox(save_window, textvariable=format_var, values=formats)
+        format_menu.grid(row=0, column=1, padx=10, pady=5)
 
-        def save_with_format():
-            self.image_format.set(format_var.get())
-            self._save_plot_impl()
-            format_window.destroy()
+        # Выбор DPI (разрешения)
+        ttk.Label(save_window, text="Разрешение (DPI):").grid(row=1, column=0, padx=10, pady=5)
+        dpi_var = tk.StringVar(value="200")  # Значение по умолчанию
+        dpi_input = tk.Entry(save_window, textvariable=dpi_var)
+        dpi_input.grid(row=1, column=1, padx=10, pady=5)
 
-        save_button = tk.Button(format_window, text="Сохранить", command=save_with_format)
-        save_button.pack(pady=10)
+        # Имя файла
+        ttk.Label(save_window, text="Имя файла:").grid(row=2, column=0, padx=10, pady=5)
+        filename_var = tk.StringVar()
 
-        cancel_button = tk.Button(format_window, text="Отмена", command=format_window.destroy)
-        cancel_button.pack(pady=5)
-
-    def _save_plot_impl(self):
-        """Внутренний метод для сохранения графика с выбранным форматом."""
+        # Генерируем имя файла по умолчанию в зависимости от вкладки
         current_tab_index = self.tab_control.index("current")
-        file_name = ""
-
         if current_tab_index == 0:  # Вкладка начального состояния
-            selected_functions = [
-                func for func, var in self.function_vars_initial.items() if var.get()
-            ]
-            if not selected_functions:
-                messagebox.showwarning("Warning", "Нет выбранных функций для сохранения.")
-                return
-
-            tab_name = "Initial"
-            base_name = []
-            if 'c_z/c_r' in selected_functions:
-                base_name.append('cz')
-                base_name.append('cr')
-            base_name += [func for func in selected_functions if func not in ['c_z/c_r']]
-            file_name = f"{tab_name}_" + "__".join(base_name)
-
+            selected_functions = [func for func, var in self.function_vars_initial.items() if var.get()]
+            if selected_functions:
+                tab_name = "Initial"
+                base_name = []
+                if 'c_z/c_r' in selected_functions:
+                    base_name.append('cz')
+                    base_name.append('cr')
+                base_name += [func for func in selected_functions if func not in ['c_z/c_r']]
+                default_name = f"{tab_name}_" + "__".join(base_name)
+                filename_var.set(default_name)
         elif current_tab_index == 1:  # Вкладка Fourier
-            selected_functions = [
-                func for func, var in self.function_vars_fourier.items() if var.get()
-            ]
-            if not selected_functions:
-                messagebox.showwarning("Warning", "Нет выбранных функций для сохранения.")
-                return
-
-            tab_name = "Fourier"
-            file_name = f"{tab_name}_" + "_".join(selected_functions)
-
+            selected_functions = [func for func, var in self.function_vars_fourier.items() if var.get()]
+            if selected_functions:
+                tab_name = "Fourier"
+                default_name = f"{tab_name}_" + "_".join(selected_functions)
+                filename_var.set(default_name)
         elif current_tab_index == 2:  # Вкладка пакетной обработки
-            if not hasattr(self, 'current_filename') or not self.current_filename:
-                messagebox.showwarning("Warning", "Нет загруженного графика для сохранения.")
+            if hasattr(self, 'current_filename') and self.current_filename:
+                base_name = os.path.splitext(self.current_filename)[0]
+                filename_var.set(base_name)
+        elif current_tab_index == 3:  # Вкладка радиусов
+            if self.data_loaded_radius:
+                tab_name = "Radius"
+                characteristic_suffix = self.characteristic_display.replace(r'$c_{z}(rt)$', 'cz').replace(
+                    r'$c_{\varphi}(rt)$', 'cf').replace(r'$c_{r}(rt)$', 'cr').replace(r'$h(rt)$', 'h')
+                default_name = f"{tab_name}_{characteristic_suffix}"
+                filename_var.set(default_name)
+
+        filename_entry = tk.Entry(save_window, textvariable=filename_var)
+        filename_entry.grid(row=2, column=1, padx=10, pady=5)
+
+        def save_with_params():
+            self.image_format.set(format_var.get())
+            try:
+                dpi = int(dpi_var.get())
+                if dpi <= 0:
+                    raise ValueError
+            except ValueError:
+                messagebox.showerror("Ошибка", "Разрешение должно быть положительным целым числом.")
                 return
 
+            filename = filename_var.get().strip()
+            if not filename:
+                messagebox.showerror("Ошибка", "Введите имя файла.")
+                return
 
-            base_name = os.path.splitext(self.current_filename)[0]
-            file_name = f"{base_name}"
-
-            file_path = os.path.join(self.save_directory, f"{file_name}.{self.image_format.get()}")
+            file_path = os.path.join(self.save_directory, f"{filename}.{format_var.get()}")
 
             try:
-                self.batch_fig.savefig(file_path, format=self.image_format.get())
-                messagebox.showinfo("Success", f"График успешно сохранен в формате {self.image_format.get().upper()}!")
+                if current_tab_index == 0:
+                    self.initial_fig.savefig(file_path, format=format_var.get(), dpi=dpi)
+                elif current_tab_index == 1:
+                    self.fourier_fig.savefig(file_path, format=format_var.get(), dpi=dpi)
+                elif current_tab_index == 2:
+                    if self.batch_x is None or self.batch_y is None or self.batch_z is None:
+                        messagebox.showwarning("Warning", "Нет данных для сохранения.")
+                        return
+                    self.batch_fig.savefig(file_path, format=format_var.get(), dpi=dpi)
+                elif current_tab_index == 3:
+                    self.radius_fig.savefig(file_path, format=format_var.get(), dpi=dpi)
+
+                messagebox.showinfo("Success", f"График успешно сохранен как {filename}.{format_var.get()}!")
+                save_window.destroy()
             except Exception as e:
                 messagebox.showerror("Error", f"Не удалось сохранить график: {e}")
-            return
 
-        elif current_tab_index == 3:  # Вкладка радиусов
-            # Для вкладки радиусов проверяем, загружены ли данные
-            if not self.data_loaded_radius:
-                messagebox.showwarning("Warning", "Пожалуйста, загрузите данные перед сохранением графика.")
-                return
+        save_button = tk.Button(save_window, text="Сохранить", command=save_with_params)
+        save_button.grid(row=3, column=0, columnspan=2, pady=10)
 
-            # Определяем выбранные радиусы
-            selected_radii = []
-
-            # Проверяем, выбран ли вариант "Все радиусы"
-            if self.function_vars_radius['Все радиусы'].get():
-                selected_radii = list(range(1, 31))
-            else:
-                # Проверяем ввод в поле радиусов
-                radius_values = self.radius_input.get().strip()
-                if radius_values:
-                    try:
-                        selected_radii = [int(r) for r in radius_values.split(',')]
-                    except ValueError:
-                        messagebox.showerror("Ошибка", "Пожалуйста, введите корректные номера радиусов.")
-                        return
-
-                # Проверяем ввод в полях диапазона
-                radius_min = self.radius_min_input.get().strip()
-                radius_max = self.radius_max_input.get().strip()
-                if radius_min and radius_max:
-                    try:
-                        radius_min = int(radius_min)
-                        radius_max = int(radius_max)
-                        selected_radii = list(range(radius_min, radius_max + 1))
-                    except ValueError:
-                        messagebox.showerror("Ошибка",
-                                             "Пожалуйста, введите корректные значения для диапазона радиусов.")
-                        return
-
-            # Если ни один радиус не выбран, используем все радиусы по умолчанию
-            if not selected_radii:
-                selected_radii = list(range(1, 31))
-
-            tab_name = "Radius"
-            characteristic_suffix = self.characteristic_display.replace(r'$c_{z}(rt)$', 'cz').replace(
-                r'$c_{\varphi}(rt)$', 'cf').replace(r'$c_{r}(rt)$', 'cr').replace(r'$h(rt)$', 'h')
-            file_name = f"{tab_name}_{characteristic_suffix}"
-
-        else:
-            messagebox.showwarning("Warning", "Неизвестная вкладка.")
-            return
-
-        # Добавляем расширение файла в соответствии с выбранным форматом
-        file_path = os.path.join(self.save_directory, f"{file_name}.{self.image_format.get()}")
-
-        try:
-            if current_tab_index == 0:
-                self.initial_fig.savefig(file_path, format=self.image_format.get())
-            elif current_tab_index == 1:
-                self.fourier_fig.savefig(file_path, format=self.image_format.get())
-            elif current_tab_index == 2:  # Вкладка пакетной обработки
-                if self.batch_x is None or self.batch_y is None or self.batch_z is None:
-                    messagebox.showwarning("Warning", "Нет данных для сохранения.")
-                    return
-            elif current_tab_index == 3:
-                self.radius_fig.savefig(file_path, format=self.image_format.get())
-            messagebox.showinfo("Success", f"График успешно сохранен в формате {self.image_format.get().upper()}!")
-        except Exception as e:
-            messagebox.showerror("Error", f"Не удалось сохранить график: {e}")
+        cancel_button = tk.Button(save_window, text="Отмена", command=save_window.destroy)
+        cancel_button.grid(row=4, column=0, columnspan=2, pady=5)
 
     def save_all_batch_files(self):
         if not self.save_directory:
@@ -2274,30 +2241,43 @@ class TabbedApp:
             messagebox.showwarning("Warning", "Сначала выберите директорию с данными.")
             return
 
-        # Создаем окно выбора формата для пакетного сохранения
-        format_window = tk.Toplevel(self.root)
-        format_window.title("Выбор формата изображения")
+        # Создаем окно для выбора параметров сохранения
+        save_window = tk.Toplevel(self.root)
+        save_window.title("Параметры пакетного сохранения")
 
-        ttk.Label(format_window, text="Выберите формат изображения:").pack(pady=10)
-
+        # Выбор формата изображения
+        ttk.Label(save_window, text="Формат изображения:").grid(row=0, column=0, padx=10, pady=5)
         format_var = tk.StringVar(value=self.image_format.get())
         formats = ['png', 'jpg', 'jpeg', 'tiff', 'svg', 'pdf', 'eps']
-        format_menu = ttk.Combobox(format_window, textvariable=format_var, values=formats)
-        format_menu.pack(pady=5)
+        format_menu = ttk.Combobox(save_window, textvariable=format_var, values=formats)
+        format_menu.grid(row=0, column=1, padx=10, pady=5)
 
-        def save_with_format():
+        # Выбор DPI (разрешения)
+        ttk.Label(save_window, text="Разрешение (DPI):").grid(row=1, column=0, padx=10, pady=5)
+        dpi_var = tk.StringVar(value="200")  # Значение по умолчанию
+        dpi_input = tk.Entry(save_window, textvariable=dpi_var)
+        dpi_input.grid(row=1, column=1, padx=10, pady=5)
+
+        def save_with_params():
             self.image_format.set(format_var.get())
-            format_window.destroy()
-            self._save_all_batch_files_impl()
+            try:
+                dpi = int(dpi_var.get())
+                if dpi <= 0:
+                    raise ValueError
+            except ValueError:
+                messagebox.showerror("Ошибка", "Разрешение должно быть положительным целым числом.")
+                return
 
-        save_button = tk.Button(format_window, text="Сохранить", command=save_with_format)
-        save_button.pack(pady=10)
+            save_window.destroy()
+            self._save_all_batch_files_impl(dpi)
 
-        cancel_button = tk.Button(format_window, text="Отмена", command=format_window.destroy)
-        cancel_button.pack(pady=5)
+        save_button = tk.Button(save_window, text="Сохранить", command=save_with_params)
+        save_button.grid(row=2, column=0, columnspan=2, pady=10)
 
-    def _save_all_batch_files_impl(self):
-        """Внутренний метод для пакетного сохранения с выбранным форматом."""
+        cancel_button = tk.Button(save_window, text="Отмена", command=save_window.destroy)
+        cancel_button.grid(row=3, column=0, columnspan=2, pady=5)
+
+    def _save_all_batch_files_impl(self, dpi=200):
         try:
             start_time = float(self.start_time_input.get())
             end_time = float(self.end_time_input.get())
@@ -2309,84 +2289,127 @@ class TabbedApp:
             messagebox.showerror("Error", "Начальное время должно быть меньше или равно конечному.")
             return
 
-        # Get the function name from the label
-        function_name = self.function_label.cget("text").replace("Функция: ", "").strip().lower()
+        # Собираем все подходящие файлы
+        valid_files = []
+        for f in os.listdir(self.selected_directory):
+            if not f.endswith(".dat"):
+                continue
 
-        # Filter files based on the function name
-        if function_name == "q":
-            files = [f for f in os.listdir(self.selected_directory) if f.endswith('.dat') and f.startswith('q')]
-        elif function_name == "dq":
-            files = [f for f in os.listdir(self.selected_directory) if f.endswith('.dat') and f.startswith('dq')]
-        else:
-            files = [f for f in os.listdir(self.selected_directory) if f.endswith('.dat')]
+            # Определяем тип файла
+            if f.startswith("dq"):
+                func_type = "dq"
+            elif f.startswith("q_"):
+                func_type = "q"
+            else:
+                continue  # Пропускаем неизвестные форматы
 
-        if not files:
-            messagebox.showwarning("Warning", f"Не найдено файлов для функции '{function_name}'")
+            # Извлекаем время
+            file_time = self.extract_time_from_filename(f)
+            if file_time is None or not (start_time <= file_time <= end_time):
+                continue
+
+            valid_files.append((f, func_type, file_time))
+
+        if not valid_files:
+            messagebox.showwarning("Warning", "Нет файлов в указанном временном диапазоне.")
             return
 
-        self.progress_bar["maximum"] = len(files)
+        # Первый проход: вычисление глобальных min и max для колорбара
+        global_min = None
+        global_max = None
+        for filename, func_type, file_time in valid_files:
+            full_path = os.path.join(self.selected_directory, filename)
+            data = np.loadtxt(full_path)
+            z = data[:, 2]
+
+            if func_type == "q":
+                z = np.where(z <= 0, 1e-10, z)
+                z = np.log10(z)
+
+            current_min = np.nanmin(z)
+            current_max = np.nanmax(z)
+
+            global_min = current_min if global_min is None else min(global_min, current_min)
+            global_max = current_max if global_max is None else max(global_max, current_max)
+
+        # Проверка, что значения найдены
+        if global_min is None or global_max is None:
+            messagebox.showerror("Error", "Нет данных для построения графиков")
+            return
+
+        # Создаем фиксированные уровни и метки
+        num_levels = self.batch_plot_params.get('contour_levels', 35)
+        contour_levels = np.linspace(global_min, global_max, num_levels)
+
+        num_ticks = self.batch_plot_params.get('colorbar_ticks_num', 5)
+        colorbar_ticks = np.linspace(global_min, global_max, num_ticks)
+
+        precision = self.batch_plot_params.get('colorbar_precision', 2)
+        tick_labels = [f"{tick:.{precision}f}" for tick in colorbar_ticks]
+
+        # Настройка прогресс-бара
+        self.progress_bar["maximum"] = len(valid_files)
         self.progress_bar["value"] = 0
         start_processing_time = time.time()
 
-        for i, file in enumerate(files):
+        for i, (filename, func_type, file_time) in enumerate(valid_files):
             try:
-                file_time = self.extract_time_from_filename(file)
-                if file_time is not None and start_time <= file_time <= end_time:
-                    data = np.loadtxt(os.path.join(self.selected_directory, file))
-                    x = data[:, 0]
-                    y = data[:, 1]
-                    z = data[:, 2]
+                # Загрузка данных
+                full_path = os.path.join(self.selected_directory, filename)
+                data = np.loadtxt(full_path)
+                x = data[:, 0]
+                y = data[:, 1]
+                z = data[:, 2]
 
-                    # Apply log if it's a q file and log is selected
-                    if file.startswith('q') and self.log_q_var.get():
-                        z = np.log10(z)
+                # Применяем логарифм только для q
+                if func_type == "q":
+                    z = np.where(z <= 0, 1e-10, z)
+                    z = np.log10(z)
 
-                    fig, ax = plt.subplots()
-                    contour = ax.tricontourf(
-                        x, y, z,
-                        self.batch_plot_params['contour_levels'],
-                        cmap=self.batch_plot_params['colorbar'],
-                        vmin=self.batch_plot_params.get('colorbar_min'),
-                        vmax=self.batch_plot_params.get('colorbar_max')
-                    )
-                    fig.colorbar(contour, ax=ax)
+                # Создаем график
+                fig = plt.Figure(figsize=(8, 8), dpi=dpi)
+                ax = fig.add_subplot(111)
+                contour = ax.tricontourf(
+                    x, y, z,
+                    levels=contour_levels,
+                    cmap=self.batch_plot_params['colorbar'],
+                    vmin=global_min,
+                    vmax=global_max
+                )
+                ax.set_aspect("equal")
 
-                    # Add title with time
-                    ax.set_title(f"t = {file_time:.3f}", fontsize=self.batch_plot_params['font_size'])
+                # Добавляем цветовую шкалу
+                cbar = fig.colorbar(contour, ax=ax, ticks=colorbar_ticks)
+                cbar.ax.set_yticklabels(tick_labels)
+                cbar.ax.tick_params(labelsize=self.batch_plot_params.get('colorbar_font_size', 10))
 
-                    ax.set_xlabel(self.batch_plot_params['x_label'], fontsize=self.batch_plot_params['font_size'])
-                    ax.set_ylabel(self.batch_plot_params['y_label'], fontsize=self.batch_plot_params['font_size'])
+                # Заголовок с временем
+                ax.set_title(
+                    f"t = {file_time:.3f}",
+                    fontsize=self.batch_plot_params.get('title_font_size', 12)
+                )
 
-                    # Set axis limits
-                    if self.batch_plot_params['x_lim_max'] is not None:
-                        ax.set_xlim(self.batch_plot_params['x_lim_min'], self.batch_plot_params['x_lim_max'])
-                    else:
-                        ax.set_xlim(left=self.batch_plot_params['x_lim_min'])
+                # Сохраняем файл
+                output_name = f"{func_type}_{file_time:.3f}.{self.image_format.get()}"
+                output_path = os.path.join(self.save_directory, output_name)
+                fig.savefig(output_path, bbox_inches="tight", dpi=dpi)
+                plt.close(fig)
 
-                    if self.batch_plot_params['y_lim_max'] is not None:
-                        ax.set_ylim(self.batch_plot_params['y_lim_min'], self.batch_plot_params['y_lim_max'])
-                    else:
-                        ax.set_ylim(bottom=self.batch_plot_params['y_lim_min'])
-
-                    ax.tick_params(axis='both', labelsize=self.batch_plot_params['font_size'])
-
-                    # Save with selected format
-                    base_name = os.path.splitext(file)[0]
-                    file_path = os.path.join(self.save_directory, f"{base_name}.{self.image_format.get()}")
-                    fig.savefig(file_path, format=self.image_format.get())
-                    plt.close(fig)
-
+                # Обновляем прогресс
                 self.progress_bar["value"] = i + 1
                 self.root.update_idletasks()
 
-                elapsed_time = time.time() - start_processing_time
-                remaining_time = (elapsed_time / (i + 1)) * (len(files) - (i + 1))
-                self.remaining_time_label.config(text=f"Оставшееся время: {remaining_time:.2f} сек")
+                # Расчет оставшегося времени
+                elapsed = time.time() - start_processing_time
+                avg_time = elapsed / (i + 1)
+                remaining = avg_time * (len(valid_files) - i - 1)
+                self.remaining_time_label.config(text=f"Осталось: {remaining:.1f} сек")
 
             except Exception as e:
-                messagebox.showerror("Error", f"Не удалось обработать файл {file}: {e}")
+                messagebox.showerror("Ошибка", f"Файл {filename}: {str(e)}")
+                continue
 
-        messagebox.showinfo("Success", f"Файлы успешно сохранены в формате {self.image_format.get().upper()}!")
+        messagebox.showinfo("Готово", f"Сохранено файлов: {len(valid_files)}")
 
 if __name__ == "__main__":
     root = tk.Tk()
